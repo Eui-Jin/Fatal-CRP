@@ -1,0 +1,353 @@
+# install.packages("ROCR")
+# install.packages("data.table")
+# install.packages("pracma")
+library(ROCR)
+library(data.table)
+library(pracma)
+
+
+# 1. Data Preprocessing
+## Construct the integrated dataset from 2006 to 2008.
+temp_acc_fatal_pm_2006=NULL # absolute postmile (PM) that can be compared between different routes, 0.01 mile unit
+temp_acc_fatal_count_2006=NULL # fatal collision location in each PM
+temp_crp_pm_2006=NULL
+temp_crp_2006=NULL # CRP value in each PM
+
+temp_acc_fatal_pm_2007=NULL
+temp_acc_fatal_count_2007=NULL
+temp_crp_pm_2007=NULL
+temp_crp_2007=NULL
+
+temp_acc_fatal_pm_2008=NULL
+temp_acc_fatal_count_2008=NULL
+temp_crp_pm_2008=NULL
+temp_crp_2008=NULL
+
+new_str_pm_2006=0
+new_str_pm_2007=0
+new_str_pm_2008=0
+
+
+## Six routes of California interstate highway are considered: 80W, 80E, 580W, 580E, 880S, 880N
+RD_combiniations = list(c(80,"W"),c(80,"E"),c(580,"W"),c(580,"E"),c(880,"S"),c(880,"N"))
+
+for(k in 1:length(RD_combiniations)){
+  route = RD_combiniations[[k]][1]
+  direction = RD_combiniations[[k]][2]
+  
+  for(year in 2006:2008){
+    
+    crp=read.table(paste("Data/D4_I",route,direction,"_",(year),"_CRP.csv",sep=""), sep=",", head=T)
+    spf=read.table(paste("Data/D4_I",route,direction,"_",(year),"_SPF.csv",sep=""), sep=",", head=T)
+    acc=read.table(paste("Data/D4_I",route,direction,"_",(year),"_ACC.csv",sep=""), sep=",", head=T)
+    
+    ### Calculate the excess CRP over the SPF (i.e., potential safety improvement (PSI))
+    spf_fun=approxfun(spf$abspm,spf$total_spf,rule=2)
+    excess_crp=crp$total_crp-spf_fun(crp$abspm)
+    excess_crp[excess_crp<0]=0
+    
+
+    ### Count the fatal or injury collision in each PM
+    acc_fatal_pm=acc$mid_pm[acc$fatal!=0]
+    acc_fatal_count=acc$fatal[acc$fatal!=0]
+    acc_injury_pm=acc$mid_pm[acc$injury!=0]
+    acc_injury_count=acc$injury[acc$injury!=0]
+
+    assign(paste("acc_fatal_pm_",year,sep=""),acc_fatal_pm)
+    assign(paste("acc_fatal_count_",year,sep=""),acc_fatal_count)
+    assign(paste("acc_injury_pm_",year,sep=""),acc_injury_pm)
+    assign(paste("acc_injury_count_",year,sep=""),acc_injury_count)
+    assign(paste("crp_pm_",year,sep=""),crp$abspm)
+    assign(paste("crp_",year,sep=""),excess_crp)
+  }
+  
+  # Save the value of each route
+  temp_acc_fatal_pm_2006=c(temp_acc_fatal_pm_2006,acc_fatal_pm_2006+new_str_pm_2006)
+  temp_acc_fatal_count_2006=c(temp_acc_fatal_count_2006,acc_fatal_count_2006)
+  temp_crp_pm_2006=c(temp_crp_pm_2006,crp_pm_2006+new_str_pm_2006)
+  temp_crp_2006=c(temp_crp_2006,crp_2006)
+  new_str_pm_2006=temp_crp_pm_2006[length(temp_crp_pm_2006)]
+  
+  temp_acc_fatal_pm_2007=c(temp_acc_fatal_pm_2007,acc_fatal_pm_2007+new_str_pm_2007)
+  temp_acc_fatal_count_2007=c(temp_acc_fatal_count_2007,acc_fatal_count_2007)
+  temp_crp_pm_2007=c(temp_crp_pm_2007,crp_pm_2007+new_str_pm_2007)
+  temp_crp_2007=c(temp_crp_2007,crp_2007)
+  new_str_pm_2007=temp_crp_pm_2007[length(temp_crp_pm_2007)]
+  
+  temp_acc_fatal_pm_2008=c(temp_acc_fatal_pm_2008,acc_fatal_pm_2008+new_str_pm_2008)
+  temp_acc_fatal_count_2008=c(temp_acc_fatal_count_2008,acc_fatal_count_2008)
+  temp_crp_pm_2008=c(temp_crp_pm_2008,crp_pm_2008+new_str_pm_2008)
+  temp_crp_2008=c(temp_crp_2008,crp_2008)
+  new_str_pm_2008=temp_crp_pm_2008[length(temp_crp_pm_2008)]
+  
+}
+
+
+
+
+## Parameters for calculating likelihood of fatal collision locations
+alpha=0.6 # likelihood function = 1/(1+d^alpha)
+
+## Setting the integrated data 
+acc_fatal_pm_2006=temp_acc_fatal_pm_2006
+acc_fatal_count_2006=temp_acc_fatal_count_2006
+crp_pm_2006=temp_crp_pm_2006
+crp_2006=temp_crp_2006
+
+acc_fatal_pm_2007=temp_acc_fatal_pm_2007
+acc_fatal_count_2007=temp_acc_fatal_count_2007
+crp_pm_2007=temp_crp_pm_2007
+crp_2007=temp_crp_2007
+
+acc_fatal_pm_2008=temp_acc_fatal_pm_2008
+acc_fatal_count_2008=temp_acc_fatal_count_2008
+crp_pm_2008=temp_crp_pm_2008
+crp_2008=temp_crp_2008
+
+
+# 2. Construct the Fatal CRP based on naive Bayesian approach
+
+
+# Integrated PM for Each sites
+# I80W : 0.1-74.89 : 0.1-74.89
+# I80E : 0.1-79.89 : 74.99-154.78
+# I580W : 15.1-79.89 : 169.88 - 234.67
+# I580E : 15.1-79.89 : 249.77 - 314.56
+# I880S : 0.1 -49.90 : 314.76 - 364.56
+# I880N : 0.1 -49.90 : 364.66 - 414.46
+
+
+# Calculate the likelihood and posterior (i.e., CRP * Likelihood) of each routes
+Route_s = c(0.1,74.89,154.88,234.77,314.66,364.56)
+Route_e = c(74.89,154.88,234.77,314.66,364.56,414.46)
+
+S_crp_pm_2006 = list()
+S_unif_prior = list()
+S_acc_fatal_pm_2006 = list()
+S_acc_fatal_count_2006 = list()
+S_num_fatal_2006 = list()
+S_Pf_d_2006 = list()
+S_post_unif_2006 = list()
+S_post_crp_2006 = list()
+S_crp_2006 = list()
+S_likelihood_2006 = list()
+
+
+for(i in 1:6)
+{
+  S_crp_pm_2006[[i]] = crp_pm_2006[crp_pm_2006 %between% c(Route_s[i],Route_e[i])]
+  S_unif_prior[[i]]  = rep(1/(max(S_crp_pm_2006[[i]])-min(S_crp_pm_2006[[i]])),length(S_crp_pm_2006[[i]]))
+  S_acc_fatal_pm_2006[[i]] = acc_fatal_pm_2006[acc_fatal_pm_2006 %between% c(Route_s[i],Route_e[i])]
+  S_acc_fatal_count_2006[[i]] = acc_fatal_count_2006[acc_fatal_pm_2006 %between% c(Route_s[i],Route_e[i])]
+  S_num_fatal_2006[[i]] = length(S_acc_fatal_pm_2006[[i]])
+  S_Pf_d_2006[[i]]=matrix(nrow = length(S_crp_pm_2006[[i]]),ncol = S_num_fatal_2006[[i]])
+  
+  for(j in 1:S_num_fatal_2006[[i]]){
+    S_Pf_d_2006[[i]][,j]=(1/(1+(abs(S_crp_pm_2006[[i]] - S_acc_fatal_pm_2006[[i]][j]))^alpha))^S_acc_fatal_count_2006[[i]][j]
+  }
+  
+  S_likelihood_2006[[i]] = apply(S_Pf_d_2006[[i]],1,prod)
+  S_likelihood_2006[[i]] = S_likelihood_2006[[i]]/sum(S_likelihood_2006[[i]])
+  
+  S_post_unif_2006[[i]] = S_unif_prior[[i]]*apply(S_Pf_d_2006[[i]],1,prod)
+  S_post_unif_2006[[i]] = S_post_unif_2006[[i]]/sum(S_post_unif_2006[[i]])
+  
+  S_crp_2006[[i]] = crp_2006[crp_pm_2006 %between% c(Route_s[i],Route_e[i])]
+  
+  S_post_crp_2006[[i]]=S_crp_2006[[i]]*S_likelihood_2006[[i]]
+  S_post_crp_2006[[i]]=S_post_crp_2006[[i]]
+  
+}
+
+
+post_crp_2006 = c(S_post_crp_2006[[1]],S_post_crp_2006[[2]],S_post_crp_2006[[3]],
+                  S_post_crp_2006[[4]],S_post_crp_2006[[5]],S_post_crp_2006[[6]])
+post_unif_2006 = c(S_post_unif_2006[[1]],S_post_unif_2006[[2]],S_post_unif_2006[[3]],
+                  S_post_unif_2006[[4]],S_post_unif_2006[[5]],S_post_unif_2006[[6]])
+unif_prior = c(S_unif_prior[[1]],S_unif_prior[[2]],S_unif_prior[[3]],
+               S_unif_prior[[4]],S_unif_prior[[5]],S_unif_prior[[6]])
+
+# Plot the posterior, reproducibility prior(CRP), and uniform prior
+i = 1 # I80W
+par(mfrow =c(1,3))
+plot(S_crp_pm_2006[[i]],S_post_crp_2006[[i]],type='l',xlab = "PM",ylab="Posterior",main="I80W-Posterior") 
+plot(S_crp_pm_2006[[i]],S_crp_2006[[i]],type='l',xlab = "PM",ylab="Prior(CRP)",main="I80W-Prior") 
+plot(S_crp_pm_2006[[i]],S_likelihood_2006[[i]],type='l',xlab = "PM",ylab="Likelihood",main="I80W-Likelihood") 
+
+
+
+# 3. Evaluation
+
+## Calculate probabilities P(D|F)
+num_fatal_2006=length(acc_fatal_pm_2006)
+num_fatal_2007=length(acc_fatal_pm_2007)
+num_fatal_2008=length(acc_fatal_pm_2008)
+
+l=1 # length of range for P
+P_crp_deadly_2006=NULL
+P_unif_deadly_2006=NULL
+
+for(j in 1:num_fatal_2006){
+  P_crp_deadly_2006[j]=sum(post_crp_2006[crp_pm_2006>=acc_fatal_pm_2006[j]-l & crp_pm_2006<=acc_fatal_pm_2006[j]+l])
+  P_unif_deadly_2006[j]=sum(post_unif_2006[crp_pm_2006>=acc_fatal_pm_2006[j]-l & crp_pm_2006<=acc_fatal_pm_2006[j]+l])
+}
+
+
+
+## Site selection based on probability of deadly site
+## CRP PM increament = 0.01
+acc_fatal_pm_2007=c(acc_fatal_pm_2007,acc_fatal_pm_2008)
+acc_fatal_count_2007=c(acc_fatal_count_2007,acc_fatal_count_2008)
+win_len=1
+num_sec=win_len/0.01
+
+
+## Selecting deadly site from 2006 fatal collision method
+### Fatal site merging within window length
+fatal_site_index=((crp_pm_2006>=acc_fatal_pm_2006[1]-win_len/2) & (crp_pm_2006<=acc_fatal_pm_2006[1]+win_len/2))
+for(i in 2:length(acc_fatal_pm_2006)){
+  fatal_site_index=fatal_site_index | ((crp_pm_2006>=acc_fatal_pm_2006[i]-win_len/2) & (crp_pm_2006<=acc_fatal_pm_2006[i]+win_len/2))
+}
+
+fatal_site_num=NULL
+index=0
+
+k=1
+for(i in 1:length(fatal_site_index)){
+  if(fatal_site_index[i]){
+    fatal_site_num[i]=k
+    index=1
+  } else if(index>0){
+    index=0
+    k=k+1
+    fatal_site_num[i]=0
+  } else {
+    fatal_site_num[i]=0
+  }  
+}
+
+top_p_deadly_crp=matrix(nrow = max(fatal_site_num) ,ncol = 4)
+for(i in 1:max(fatal_site_num)){
+  top_p_deadly_crp[i,1]=min(crp_pm_2006[fatal_site_num==i])-0.005
+  top_p_deadly_crp[i,2]=max(crp_pm_2006[fatal_site_num==i])+0.005
+  top_p_deadly_crp[i,3]=top_p_deadly_crp[i,2]-top_p_deadly_crp[i,1]
+  top_p_deadly_crp[i,4]=sum(post_crp_2006[fatal_site_num==i])/top_p_deadly_crp[i,3]
+}
+
+## Prioritized reproducible fatal collision locations by posterior 
+### Columns = (start PM, end PM, length, posterior)
+top_p_deadly_crp=top_p_deadly_crp[order(top_p_deadly_crp[,4],decreasing = T),]
+
+
+
+## Compare the reproducible fatal collision with true reproducible sites
+top=nrow(top_p_deadly_crp)
+d_fatal_crp=((acc_fatal_pm_2007>=top_p_deadly_crp[1,1]) & (acc_fatal_pm_2007<=top_p_deadly_crp[1,2]))
+perf_crp=sum(acc_fatal_count_2007[d_fatal_crp])#/sum(acc_fatal_count_2007)
+if(perf_crp==0){
+  detect_crp=0
+} else {
+  detect_crp=1
+}
+for(i in 2:top){
+  d_fatal_crp=d_fatal_crp | ((acc_fatal_pm_2007>=top_p_deadly_crp[i,1]) & (acc_fatal_pm_2007<=top_p_deadly_crp[i,2]))
+  perf_crp[i]=sum(acc_fatal_count_2007[d_fatal_crp])#/sum(acc_fatal_count_2007)
+  if(perf_crp[i-1]==perf_crp[i]){
+    detect_crp[i]=0
+  } else {
+    detect_crp[i]=1
+  }
+}
+
+top_p_deadly_crp = as.data.frame(cbind(top_p_deadly_crp,detect_crp))
+
+
+
+## Random selection without prior (i.e., ROC ~ 0.5)
+num_try=1000
+perf_rnd=NULL
+detect_rnd=NULL
+for(i in 1:top){
+  temp_perf=NULL
+  temp_detect=NULL
+  for(j in 1:num_try){
+    rnd_select=sample(1:top,size = i,replace = F)
+    selected_site_sp=top_p_deadly_crp[rnd_select,1]
+    selected_site_ep=top_p_deadly_crp[rnd_select,2]
+    d_fatal_rnd=((acc_fatal_pm_2007>=selected_site_sp[1]) & (acc_fatal_pm_2007<=selected_site_ep[1]))
+    if(i>=2){
+      for(k in 2:i){
+        d_fatal_rnd=d_fatal_rnd | ((acc_fatal_pm_2007>=selected_site_sp[k]) & (acc_fatal_pm_2007<=selected_site_ep[k]))
+      }
+    }
+    temp_perf[j]=sum(acc_fatal_count_2007[d_fatal_rnd])#/sum(acc_fatal_count_2007)
+    temp_detect[j]=sum(detect_crp[rnd_select])
+  }
+  perf_rnd[i]=mean(temp_perf)
+  detect_rnd[i]=mean(temp_detect)
+}
+
+
+## Plots of evaluation results
+
+par(mfrow=c(1,2))
+plot(0:length(detect_crp),c(0,cumsum(detect_crp)),type='l',col='red',ylab="Cumulative number of detected sites",xlab="Number of selected sites",
+     main="Cumulative detection of reproducible fatal collision sites")
+points(0:length(detect_crp),c(0,cumsum(detect_crp)),col='red')
+lines(0:length(detect_rnd),c(0,detect_rnd), lty=2) # random selection
+points(0:length(detect_rnd),c(0,detect_rnd), pch=4)
+
+## plot ROC
+pred=prediction(top_p_deadly_crp[,4],detect_crp)
+perf=performance(pred,"tpr","fpr")
+plot(perf,main="ROC Curve",col=2,lwd=2)
+abline(a=0,b=1,lwd=2,lty=2,col="gray")
+auc=performance(pred,"auc")
+auc=unlist(slot(auc, "y.values"))
+text(x = 0.6,y = 0.3,labels = paste("AUC=",round(auc,2),sep=""),cex = 1.2)
+
+
+
+
+## 4. Visualization
+
+## Likelihood according to fatal collision locations in I80
+par(mfrow=c(1,1))
+num_fatal_2006_I80W=length(acc_fatal_pm_2006[acc_fatal_pm_2006<70])
+Pf_d_2006_I80W=matrix(nrow = length(crp_pm_2006[crp_pm_2006<70]),ncol = num_fatal_2006_I80W)
+for(i in 1:num_fatal_2006_I80W){
+  Pf_d_2006_I80W[,i]=(1/(1+(abs(crp_pm_2006[crp_pm_2006<70] - acc_fatal_pm_2006[acc_fatal_pm_2006<70][i]))^alpha))^acc_fatal_count_2006[acc_fatal_pm_2006<70][i]
+}
+post_crp_2006_I80W=crp_2006[crp_pm_2006<70]*apply(Pf_d_2006_I80W,1,prod)
+post_crp_2006_I80W=post_crp_2006_I80W/sum(post_crp_2006_I80W)
+
+plot(crp_pm_2006[crp_pm_2006<70],apply(Pf_d_2006_I80W,1,prod), type="l",xlab="D",ylab="L(D)",cex.lab=1.5)
+text(acc_fatal_pm_2006[c(1:2,5:10)],rep(max(apply(Pf_d_2006_I80W,1,prod)),8),labels = paste("F",1:10,sep="")[c(1:2,5:10)])
+text(acc_fatal_pm_2006[3]-1,max(apply(Pf_d_2006_I80W,1,prod)),labels = paste("F",1:10,sep="")[3])
+text(acc_fatal_pm_2006[4]+1,max(apply(Pf_d_2006_I80W,1,prod)),labels = paste("F",1:10,sep="")[4])
+
+
+
+
+## Prior vs Posterior according to fatal collision locations in I80
+par(mfrow=c(1,2))
+plot(crp_pm_2006[crp_pm_2006<70],crp_2006[crp_pm_2006<70],type="l",xlim = c(0,30),xlab="Postmile",ylab="Prior(CRP)",ylim=c(0,max(crp_2006[1:7000])))
+points(acc_fatal_pm_2006,rep(max(crp_2006[crp_pm_2006<70])*0.9,length(acc_fatal_pm_2006)), cex=1.5)
+lines(top_p_deadly_crp[,1],rep(max(crp_2006[crp_pm_2006<70])*0.9,nrow(top_p_deadly_crp)),type='h', lty=2)
+lines(top_p_deadly_crp[,2],rep(max(crp_2006[crp_pm_2006<70])*0.9,nrow(top_p_deadly_crp)),type='h', lty=2)
+acc_label=paste("S",c(1:nrow(top_p_deadly_crp)),sep="")
+text(x = sort((top_p_deadly_crp[,1]+top_p_deadly_crp[,2])/2), y= rep(max(crp_2006[crp_pm_2006<70])*0.97, nrow(top_p_deadly_crp)), labels = acc_label)
+
+plot(crp_pm_2006[crp_pm_2006<70],post_crp_2006_I80W,type="l",xlim = c(0,30),xlab="Postmile",ylab="Posterior probability density",ylim=c(0,max(post_crp_2006_I80W)))
+post_fun=approxfun(crp_pm_2006[crp_pm_2006<70],post_crp_2006_I80W,rule=2)
+for(i in 1:nrow(top_p_deadly_crp)){
+  x=c(top_p_deadly_crp[i,1],top_p_deadly_crp[i,2],top_p_deadly_crp[i,2],seq(top_p_deadly_crp[i,2]-0.005,top_p_deadly_crp[i,1]+0.005,by=-0.01),top_p_deadly_crp[i,1])
+  y=c(0,0,post_fun(c(top_p_deadly_crp[i,2],seq(top_p_deadly_crp[i,2]-0.005,top_p_deadly_crp[i,1]+0.005,by=-0.01),top_p_deadly_crp[i,1])))
+  polygon(x,y,col="gray",border = NA)
+}
+lines(crp_pm_2006[crp_pm_2006<70],post_crp_2006_I80W)
+points(acc_fatal_pm_2006,rep(max(post_crp_2006_I80W[crp_pm_2006<70])*0.9,length(acc_fatal_pm_2006)), cex=1.5)
+lines(top_p_deadly_crp[,1],rep(max(post_crp_2006_I80W[crp_pm_2006<70])*0.9,nrow(top_p_deadly_crp)),type='h', lty=2)
+lines(top_p_deadly_crp[,2],rep(max(post_crp_2006_I80W[crp_pm_2006<70])*0.9,nrow(top_p_deadly_crp)),type='h', lty=2)
+acc_label=paste("S",c(1:nrow(top_p_deadly_crp)),sep="")
+text(x = sort((top_p_deadly_crp[,1]+top_p_deadly_crp[,2])/2), y= rep(max(post_crp_2006_I80W[crp_pm_2006<70])*0.97, nrow(top_p_deadly_crp)), labels = acc_label)
