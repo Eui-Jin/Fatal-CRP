@@ -1,39 +1,28 @@
 # Detecting Reproducible Fatal Collision Locations
 
-This code implement the paper "Kim et al. (2022). Imputing Qualitative Attributes for Trip Chains Extracted from Smart Card Data Using a Conditional Generative Adversarial Network", Under-review at Transportation Research Part C: Emerging Technologies. 
+This code implements the paper, Kim et al. (2021). Application of naïve Bayesian approach in detecting reproducible fatal collision locations on freeway. PLoS One 1–21. https://doi.org/10.1371/journal.pone.0251866
 
 ## Overview
 
-The proposed model aims to estimate the qualitative attributes of large-scale passively collected mobility data by mimicking the small-scale travel survey data using Conditional Generative Adversarial Networks (CGAN).
+The objective of the model is to detect reproducible fatal collision locations based on a naive Bayesian approach. We adopted continuous risk profile ([CRP](https://escholarship.org/uc/item/24m8j57d)) and spatial distribution of fatal collision locations as a prior and a likelihood, respectively. Based on the posterior that is the product of the prior and likelihood, reproducible fatal collision locations were detected and prioritized.
 
 ## Getting Started
 
 ### Dependencies
-
-* Tensorflow 2.4.1, Keras 2.4.3
-* Python 3.6.10
+* R 4.0.3
 
 ### Components
 
 #### Dataset
-* '01_Data' include the smart card and travel survey data, before and after the preprocessing
-* Only pertubated samples of smart card and travel survey data are provided due to the permission
+* 'Data' have the traffic crash data obtained from six routes of interstate highway in Californai from 2006 to 2008.
+* Based on the data, Safety performance function (SPF) and continuous risk profile (CRP) were calculated and saved as separate files. For more details on calculating SPF and CRP, see [Kwon et al.(2013)](http://dx.doi.org/10.1016/j.aap.2012.10.019) and [Chung et al. (2009)](https://escholarship.org/uc/item/24m8j57d)
 
-##### DataPreprocessing.ipynb
-* Transforming the long-form smart card and travel survey data into ndarray form 
-
-##### 2D-Transformer.ipynb
-* Step-by-step implementation of 2D-Transformer
-* It covers every components including data load, model structure, training, evaluation, and visualization
-* Pre-trained generator using full dataset is in the 'Py_generator'
-
-##### BERT_Embed.ipynb
-* Step-by-step implementation of BERT to evaluate the fidelity and diversity
-* Transforming the categorical outputs (qualitative attributes) into the numeric one for constructing manifold 
-* Pre-trained BERT generator using full dataset is 'MLM_Embed_indiv.h5'
+##### FatalCRP.R
+* Step-by-step implementation is provided in this single file, including data preprocessing, modeling, evaluation, and visualization
+* Refer the FatalCRP.html for a detailed description of the code  
 
 ## Notice
-* Full-paper of this code with detilaed explanation will be provided after peer-review proces
+* Please refer to the full paper with this code for understanding the logic behind each process
 
 ## Authors
 
@@ -45,6 +34,4 @@ The proposed model aims to estimate the qualitative attributes of large-scale pa
 This project is licensed under the MIT License - see the LICENSE.md file for details
 
 ## Acknowledgments
-
-* [WGAN-GP](https://github.com/kongyanye/cwgan-gp)
-* [Fidelity and Diversity](https://github.com/clovaai/generative-evaluation-prdc)
+* [Benchmark model](http://dx.doi.org/10.1016/j.aap.2012.10.019)
