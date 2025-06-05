@@ -1,6 +1,6 @@
 # Application of naïve Bayesian approach in detecting reproducible fatal collision locations on freeway
 
-This code implements the paper, Kim et al. (2021). Application of naïve Bayesian approach in detecting reproducible fatal collision locations on freeway. PLoS One 1–21. https://doi.org/10.1371/journal.pone.0251866
+Kim, E. J., Kwon, O. H., Park, S. H., Kim, D. K., & Chung, K. (2021). Application of naïve Bayesian approach in detecting reproducible fatal collision locations on freeway. Plos one, 16(5), e0251866. https://doi.org/10.1371/journal.pone.0251866
 
 ## Overview
 
